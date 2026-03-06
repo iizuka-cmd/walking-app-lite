@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>マイウォーキングアプリ LITE v13.3</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 0; background-color: #f0f4f8; color: #333; padding-bottom: 80px; }
+        body.fullscreen-active { overflow: hidden; } 
+        .container { max-width: 600px; margin: auto; padding: 15px; }
+        .card { background: white; padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; }
+        h1 { font-size: 1.2em; margin: 0; border-bottom: 2px solid #27ae60; padding-bottom: 5px; }
+        .version-badge { background: #3498db; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.6em; float: right; }
+        .main-tab-content { display: none; }
+        .main-tab-content.active { display: block; }
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; background: white; display: flex; justify-content: space-around; box-shadow: 0 -2px 10px rgba(0,0,0,0.1); z-index: 9999; padding-bottom: env(safe-area-inset-bottom); }
+        .nav-btn { flex: 1; padding: 12px 0; border: none; background: none; font-size: 0.9em; color: #7f8c8d; display: flex; flex-direction: column; align-items: center; cursor: pointer; }
+        .nav-btn.active { color: #27ae60; font-weight: bold; }
+        .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .data-item { background: #eef2f7; padding: 10px; border-radius: 10px; text-align: center; }
+        .data-value { font-size: 1.2em; font-weight: bold; color: #3498db; }
+        
+        #map-container { position: relative; margin-bottom: 15px; }
+        #map { height: 320px; width: 100%; border-radius: 15px; border: 2px solid #ddd; z-index: 1; background: #f9f9f9; }
+        #normal-fullscreen-btn { position: absolute; top: 10px; right: 10px; z-index: 1000; padding: 8px 12px; background: white; border: 2px solid #ccc; border-radius: 8px; cursor: pointer; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        #map-container.is-fullscreen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10000; margin: 0; background: white; }
+        #map-container.is-fullscreen #map { height: 100vh !important; border-radius: 0; border: none; }
+        #map-container.is-fullscreen #normal-fullscreen-btn { display: none; }
+        
+        #fullscreen-controls { display: none; }
+        #map-container.is-fullscreen #fullscreen-controls {
+            display: flex; flex-direction: column; gap: 6px; position: absolute; top: calc(env(safe-area-inset-top, 40px) + 10px); 
+            left: 50%; transform: translateX(-50%); z-index: 10001; width: 96%; max-width: 400px;
+            background: rgba(255, 255, 255, 0.95); padding: 8px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); backdrop-filter: blur(5px);
+        }
+        #fullscreen-controls .fs-btn-row { display: flex; gap: 4px; width: 100%; align-items: stretch; }
+        #fullscreen-controls button { flex: 1; padding: 10px 0px; font-size: 0.8em; font-weight: bold; border: none; border-radius: 6px; color: white; cursor: pointer; white-space: nowrap; }
+        #fullscreen-controls .fs-btn-search { width: 100%; padding: 12px; font-size: 1em; background: #3498db; margin-top: 2px; }
+
+        input, select { padding: 8px; border-radius: 5px; border: 1px solid #ccc; font-size: 1em; width: 100%; box-sizing: border-box; }
+        button.action-btn { width: 100%; padding: 12px; border-radius: 10px; border: none; font-weight: bold; cursor: pointer; background: #3498db; color: white; margin-top: 10px; }
+        button.save-btn { background: #27ae60; font-size: 1.1em; padding: 15px; }
+        details { background: #f8f9fa; padding: 10px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #eee; }
+        summary { font-weight: bold; cursor: pointer; padding: 5px 0; }
+        .profile-row { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; gap: 10px; font-size: 0.9em; }
+        .meal-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; margin-top: 10px; text-align: center; font-size: 0.6em; }
+        .meal-grid input { padding: 5px; font-size: 1em; text-align: center; }
+        .food-log-item { display: flex; justify-content: space-between; align-items: center; background: #fff; border: 1px solid #ddd; padding: 6px 10px; border-radius: 5px; font-size: 0.85em; margin-bottom: 5px; }
+        .food-log-item button { background: #e74c3c; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 0.8em; }
+        .pfc-container { margin-top: 15px; padding: 12px; background: #fff; border-radius: 10px; border: 1px solid #ddd; }
+        .pfc-bar-bg { background: #eef2f7; border-radius: 5px; height: 12px; width: 100%; overflow: hidden; margin-bottom: 8px; }
+        .pfc-bar-fg { height: 100%; width: 0%; transition: width 0.4s ease; }
+        .balance-box { background: #fff3cd; border: 2px solid #ffeeba; padding: 15px; border-radius: 10px; text-align: center; margin-top: 15px; }
+        .balance-result { font-size: 1.3em; font-weight: bold; margin-top: 5px; }
+        .route-mode-box { display: flex; gap: 10px; background: #eef2f7; padding: 10px; border-radius: 10px; margin-bottom: 10px; }
+        .route-mode-box label { flex: 1; text-align: center; font-weight: bold; font-size: 0.8em; cursor: pointer; }
+        .route-mode-box input[type="radio"] { display: none; }
+        .route-mode-box input[type="radio"]:checked + span { color: #3498db; border-bottom: 2px solid #3498db; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="tab-walk" class="main-tab-content active">
+            <div class="card">
+                <h1>健康ログ <span class="version-badge">v13.3 LITE</span></h1>
+                <div style="background: #f0f4f8; padding: 10px; border-radius: 10px; margin-bottom: 15px;">
+                    <strong>目標ルート作成:</strong><br>
+                    <div class="route-mode-box">
+                        <label><input type="radio" name="route-mode" value="loop" checked onchange="toggleRouteMode()"><span>🔄 周回</span></label>
+                        <label><input type="radio" name="route-mode" value="dest" onchange="toggleRouteMode()"><span>📍 目的地</span></label>
+                    </div>
+                    <div id="distance-input-area" style="display: flex; gap: 10px; margin-top: 5px;">
+                        <select id="goal-type" style="flex: 1;"><option value="distance">距離 (km)</option><option value="steps">歩数 (歩)</option></select>
+                        <input type="number" id="goal-value" value="1" step="0.5" style="flex: 1;">
+                    </div>
+                    <button id="route-btn" class="action-btn" onclick="generateGoalRoute()">ルート検索開始</button>
+                    
+                    <div style="display: flex; gap: 5px; margin-top: 10px;">
+                        <button class="action-btn" style="background: #2980b9; margin-top:0;" onclick="centerMap()">📍 開始</button>
+                        <button class="action-btn" style="background: #27ae60; margin-top:0;" onclick="enableWaypointMode()">🟢 追加</button>
+                        <button class="action-btn" style="background: #e74c3c; margin-top:0;" onclick="clearMap()">✖ 消去</button>
+                    </div>
+                    <div id="dest-hint" style="display:none; text-align:center; font-size:0.8em; margin-top:5px; color:#e74c3c;">地図をタップして目的地を決めてください</div>
+                </div>
+                
+                <div class="data-grid">
+                    <div class="data-item">今日の歩数<br><span id="steps-display" class="data-value">0</span> 歩</div>
+                    <div class="data-item">運動消費<br><span id="calories-display" class="data-value" style="color: #16a085;">0</span> kcal</div>
+                </div>
+                
+                <div id="map-container">
+                    <button id="normal-fullscreen-btn" onclick="toggleFullscreen()">🗺️ 拡大</button>
+                    <div id="map"></div>
+                    <div id="fullscreen-controls">
+                        <div class="fs-btn-row">
+                            <button style="background: #2980b9;" onclick="centerMap()">📍開始</button>
+                            <button style="background: #27ae60;" onclick="enableWaypointMode()">🟢追加</button>
+                            <button style="background: #e74c3c;" onclick="clearMap()">✖消去</button>
+                            <button style="background: #7f8c8d;" onclick="toggleFullscreen()">❌閉じる</button>
+                        </div>
+                        <button id="fs-route-btn" class="fs-btn-search" onclick="generateGoalRoute()">🔍 ルートを再検索</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-meal" class="main-tab-content">
+            <div class="card">
+                <h2 style="margin-top:0;">⚖️ 体調と食事</h2>
+                <details>
+                    <summary>⚙️ プロフィール・API設定</summary>
+                    <div class="profile-row">
+                        <span>地図APIキー:</span>
+                        <div style="display: flex; gap: 5px; flex: 1;">
+                            <input type="password" id="map-api-key" placeholder="ey...">
+                            <button onclick="saveMapKey()" style="background:#3498db; color:white; border:none; border-radius:5px; padding:0 10px; cursor:pointer;">保存</button>
+                        </div>
+                    </div>
+                    <div class="profile-row"><span>性別:</span> <select id="gender-input" onchange="calcAll()"><option value="male">男性</option><option value="female">女性</option></select></div>
+                    <div class="profile-row"><span>生年月日:</span> <input type="date" id="dob-input" value="1990-01-01" onchange="calcAll()"></div>
+                    <div class="profile-row"><span>身長(cm):</span> <input type="number" id="height-input" value="170" oninput="calcAll()"></div>
+                    <div class="profile-row"><span>体重(kg):</span> <input type="number" id="weight-input" value="65" oninput="calcAll()"></div>
+                    <div class="profile-row"><span>目標モード:</span> <select id="goal-mode" onchange="calcAll()"><option value="diet">📉 ダイエット</option><option value="keep" selected>⚖️ 健康維持</option><option value="muscle">💪 筋力アップ</option></select></div>
+                </details>
+
+                <div style="text-align: center; padding: 10px; background: #eef2f7; border-radius: 10px; margin-bottom: 10px; font-size: 0.9em;">
+                    BMI: <strong id="bmi-display">0.0</strong> ｜ 基礎代謝: <strong id="bmr-display">0</strong> kcal
+                </div>
+                <div class="balance-box">
+                    🔥 <strong>今日のカロリーバランス</strong><br>
+                    <small>摂取 <span id="bal-in">0</span> - 消費 <span id="bal-out">0</span></small>
+                    <div id="balance-result-text" class="balance-result">---</div>
+                </div>
+
+                <div style="background:#f0f4f8; padding:10px; border-radius:10px; margin-top:15px; margin-bottom:10px;">
+                    <div style="display:flex; gap:5px; margin-bottom:5px;">
+                        <input type="text" id="manual-name" placeholder="食品名" style="flex:2;">
+                        <select id="manual-meal-type" style="flex:1;"><option value="bf">朝食</option><option value="lu">昼食</option><option value="dn">夕食</option><option value="sn">間食</option></select>
+                    </div>
+                    <div class="meal-grid">
+                        <div>Kcal</div><div>P(g)</div><div>F(g)</div><div>C(g)</div><div>塩(g)</div>
+                        <input type="number" id="manual-cal" placeholder="0"><input type="number" id="manual-p" placeholder="0"><input type="number" id="manual-f" placeholder="0"><input type="number" id="manual-c" placeholder="0"><input type="number" id="manual-s" placeholder="0">
+                    </div>
+                    <div style="display:flex; gap:10px; margin-top:10px;">
+                        <button class="action-btn" style="background:#27ae60; margin-top:0; flex:2;" onclick="addManualFood()">食事を追加</button>
+                        <button class="action-btn" style="background:#95a5a6; margin-top:0; flex:1;" onclick="clearManualInput()">クリア</button>
+                    </div>
+                </div>
+
+                <details><summary>🌅 朝食リスト</summary><div id="bf-log"></div></details>
+                <details><summary>☀️ 昼食リスト</summary><div id="lu-log"></div></details>
+                <details><summary>🌙 夕食リスト</summary><div id="dn-log"></div></details>
+                <details><summary>☕️ 間食リスト</summary><div id="sn-log"></div></details>
+
+                <div class="pfc-container">
+                    <strong>PFCバランス</strong>
+                    <div id="p-text" style="font-size:0.8em; margin-top:10px;">P 0 / 0g</div><div class="pfc-bar-bg"><div id="p-bar" class="pfc-bar-fg" style="background:#e74c3c;"></div></div>
+                    <div id="f-text" style="font-size:0.8em;">F 0 / 0g</div><div class="pfc-bar-bg"><div id="f-bar" class="pfc-bar-fg" style="background:#f1c40f;"></div></div>
+                    <div id="c-text" style="font-size:0.8em;">C 0 / 0g</div><div class="pfc-bar-bg"><div id="c-bar" class="pfc-bar-fg" style="background:#3498db;"></div></div>
+                    <div style="text-align:center; font-size:0.7em; color:#777; margin-top:5px;">目標摂取目安: <span id="target-cal-display">0</span> kcal</div>
+                </div>
+                <button class="action-btn save-btn" onclick="saveCurrentData()">💾 今日の記録をすべて保存</button>
+            </div>
+        </div>
+
+        <div id="tab-history" class="main-tab-content">
+            <div class="card">
+                <h2>📊 体重推移</h2>
+                <div style="background: white; border: 1px solid #ddd; border-radius: 10px; padding: 5px;"><canvas id="healthChart"></canvas></div>
+                <h3 style="font-size: 1em; margin-top: 20px;">🗓️ 過去の履歴</h3>
+                <div id="history-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav">
+        <button class="nav-btn active" id="btn-walk" onclick="switchMainTab('walk')"><span>🚶‍♂️</span>歩行</button>
+        <button class="nav-btn" id="btn-meal" onclick="switchMainTab('meal')"><span>⚖️</span>食事</button>
+        <button class="nav-btn" id="btn-history" onclick="switchMainTab('history')"><span>📊</span>履歴</button>
+    </nav>
+
+    <script>
+        let steps = 0; // LITE版の「今日の歩数」は手動や別アプリ管理想定のため基本0スタート
+        let todayFoodLogs = { bf: [], lu: [], dn: [], sn: [] };
+        let myChart = null;
+        
+        let map, marker, goalPath, destMarker, waypointMarker;
+        let currentLat = 35.6812, currentLng = 139.7671;
+        let isTrackingMode = true;
+        let isFullscreen = false;
+        let isWaypointMode = false;
+        let isFirstLocation = true;
+
+        function saveMapKey() {
+            const key = document.getElementById('map-api-key').value.trim();
+            localStorage.setItem('map_api_key', key);
+            alert("APIキーを保存しました。");
+        }
+
+        function switchMainTab(tabName) {
+            document.querySelectorAll('.main-tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById('tab-' + tabName).classList.add('active');
+            document.getElementById('btn-' + tabName).classList.add('active');
+            if(tabName === 'history') renderGraph();
+            if(tabName === 'walk' && map) setTimeout(() => map.invalidateSize(), 300);
+        }
+
+        function clearManualInput() {
+            ['manual-name','manual-cal','manual-p','manual-f','manual-c','manual-s'].forEach(id => { document.getElementById(id).value = ""; });
+        }
+
+        function addManualFood() {
+            const type = document.getElementById('manual-meal-type').value;
+            const item = {
+                id: Date.now(),
+                name: document.getElementById('manual-name').value || "食品",
+                kcal: parseFloat(document.getElementById('manual-cal').value) || 0,
+                p: parseFloat(document.getElementById('manual-p').value) || 0,
+                f: parseFloat(document.getElementById('manual-f').value) || 0,
+                c: parseFloat(document.getElementById('manual-c').value) || 0,
+                s: parseFloat(document.getElementById('manual-s').value) || 0
+            };
+            todayFoodLogs[type].push(item);
+            renderLogs(); calcAll(); clearManualInput();
+        }
+
+        function removeFood(type, id) {
+            todayFoodLogs[type] = todayFoodLogs[type].filter(item => item.id !== id);
+            renderLogs(); calcAll();
+        }
+
+        function renderLogs() {
+            ['bf','lu','dn','sn'].forEach(type => {
+                const container = document.getElementById(type + '-log');
+                container.innerHTML = todayFoodLogs[type].map(item => `
+                    <div class="food-log-item"><span>${item.name} (${item.kcal}kcal)</span><button onclick="removeFood('${type}', ${item.id})">✖</button></div>
+                `).join('');
+            });
+        }
+
+        function calcAll() {
+            const weight = parseFloat(document.getElementById('weight-input').value) || 0;
+            const height = parseFloat(document.getElementById('height-input').value) || 0;
+            const gender = document.getElementById('gender-input').value;
+            const dobValue = document.getElementById('dob-input').value;
+            const mode = document.getElementById('goal-mode').value;
+
+            let age = 30;
+            if (dobValue) {
+                const dob = new Date(dobValue);
+                const today = new Date();
+                age = today.getFullYear() - dob.getFullYear();
+                if (today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate())) age--;
+            }
+
+            if(height > 0) document.getElementById('bmi-display').innerText = (weight / Math.pow(height/100, 2)).toFixed(1);
+
+            let bmr = 0;
+            if(weight > 0 && height > 0) {
+                if(gender === 'male') bmr = 13.397 * weight + 4.799 * height - 5.677 * age + 88.362;
+                else bmr = 9.247 * weight + 3.098 * height - 4.33 * age + 447.593;
+            }
+            bmr = Math.max(0, Math.round(bmr));
+            document.getElementById('bmr-display').innerText = bmr;
+
+            const activeCal = Math.round(steps * weight * 0.0005);
+            document.getElementById('calories-display').innerText = activeCal;
+            document.getElementById('bal-out').innerText = bmr + activeCal;
+
+            let tKcal=0, tP=0, tF=0, tC=0, tS=0;
+            Object.values(todayFoodLogs).flat().forEach(i => { tKcal += i.kcal; tP += i.p; tF += i.f; tC += i.c; tS += i.s; });
+            document.getElementById('bal-in').innerText = Math.round(tKcal);
+
+            const balance = Math.round(tKcal - (bmr + activeCal));
+            const balEl = document.getElementById('balance-result-text');
+            balEl.innerText = (balance > 0 ? "+" : "") + balance + " kcal";
+            balEl.style.color = (balance > 200 || balance < -500) ? "#e74c3c" : "#27ae60";
+
+            let targetCal = bmr + activeCal;
+            if(mode === 'diet') targetCal -= 300;
+            if(mode === 'muscle') targetCal += 300;
+            document.getElementById('target-cal-display').innerText = Math.round(targetCal);
+
+            const targetP = weight * (mode === 'muscle' ? 2.0 : 1.2);
+            const targetF = weight * 0.9;
+            const targetC = Math.max(0, (targetCal - (targetP * 4 + targetF * 9)) / 4);
+
+            const updateBar = (id, cur, tar) => {
+                document.getElementById(id + '-text').innerText = `${id.toUpperCase()} ${cur.toFixed(1)} / ${Math.round(tar)}g`;
+                document.getElementById(id + '-bar').style.width = tar > 0 ? Math.min(100, (cur / tar) * 100) + '%' : '0%';
+            };
+            updateBar('p', tP, targetP); updateBar('f', tF, targetF); updateBar('c', tC, targetC);
+
+            localStorage.setItem('user_lite_profile', JSON.stringify({
+                gender, dob: dobValue, weight, height, mode, logs: todayFoodLogs, lastDate: new Date().toLocaleDateString()
+            }));
+        }
+
+        // 今日のデータを手動保存する処理
+        function saveCurrentData() {
+            let history = JSON.parse(localStorage.getItem('walkingHistory')) || [];
+            const date = new Date().toLocaleDateString();
+            const weight = document.getElementById('weight-input').value;
+            const data = { date, steps, weight, balance: document.getElementById('balance-result-text').innerText };
+            
+            history = [data, ...history.filter(h => h.date !== date)];
+            localStorage.setItem('walkingHistory', JSON.stringify(history));
+            alert("今日の記録を保存しました！"); 
+            displayHistory(); renderGraph();
+        }
+
+        // ★ 修正箇所：昨日の歩数を自動で裏側保存する処理
+        function saveYesterdayData(ySteps) {
+            let history = JSON.parse(localStorage.getItem('walkingHistory')) || [];
+            
+            // 昨日の日付を計算
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yDateStr = yesterday.toLocaleDateString();
+
+            // 現在の体重を取得
+            const weight = document.getElementById('weight-input').value || 65;
+            
+            const existingIndex = history.findIndex(h => h.date === yDateStr);
+            if (existingIndex !== -1) {
+                history[existingIndex].steps = ySteps; // 歩数だけ上書き
+            } else {
+                history.unshift({ date: yDateStr, steps: ySteps, weight: weight, balance: "---" });
+            }
+            
+            // 日付順に並び替え
+            history.sort((a, b) => new Date(b.date) - new Date(a.date));
+            localStorage.setItem('walkingHistory', JSON.stringify(history));
+            alert(`ショートカット連携完了：\n昨日の歩数（${ySteps}歩）を履歴に自動保存しました！`);
+        }
+
+        function displayHistory() {
+            const history = JSON.parse(localStorage.getItem('walkingHistory')) || [];
+            document.getElementById('history-list').innerHTML = history.map(h => `
+                <div class="history-item"><strong>${h.date}</strong><br>体重: ${h.weight}kg / ${h.steps}歩 / 収支: ${h.balance}</div>
+            `).join('');
+        }
+
+        function renderGraph() {
+            const history = JSON.parse(localStorage.getItem('walkingHistory')) || [];
+            if (history.length === 0) return;
+            const data = [...history].reverse();
+            const ctx = document.getElementById('healthChart').getContext('2d');
+            if (myChart) myChart.destroy();
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: data.map(h => h.date), datasets: [{ label: '体重(kg)', data: data.map(h => h.weight), borderColor: '#3498db', tension: 0.3 }] },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+        }
+
+        // --- 地図関連 ---
+        function initMap() {
+            map = L.map('map', {zoomControl: false}).setView([currentLat, currentLng], 15);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            marker = L.marker([currentLat, currentLng]).addTo(map);
+            goalPath = L.polyline([], {color: '#2980b9', weight: 6}).addTo(map);
+
+            map.on('dragstart', () => { isTrackingMode = false; });
+
+            if (navigator.geolocation) {
+                navigator.geolocation.watchPosition(p => {
+                    currentLat = p.coords.latitude; 
+                    currentLng = p.coords.longitude;
+                    const pos = [currentLat, currentLng];
+                    marker.setLatLng(pos);
+                    
+                    if (isFirstLocation) { map.setView(pos, 15); isFirstLocation = false; }
+                    else if (isTrackingMode) { map.setView(pos, map.getZoom()); }
+                }, null, { enableHighAccuracy: true });
+            }
+
+            map.on('click', e => {
+                const mode = document.querySelector('input[name="route-mode"]:checked').value;
+                if (mode === 'dest') {
+                    if (isWaypointMode) {
+                        if (waypointMarker) map.removeLayer(waypointMarker);
+                        const greenIcon = new L.Icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+                        });
+                        waypointMarker = L.marker(e.latlng, {icon: greenIcon}).addTo(map).bindPopup("中継地").openPopup();
+                        isWaypointMode = false;
+                        document.getElementById('dest-hint').innerText = "地図をタップして目的地を決めてください";
+                    } else {
+                        if (destMarker) map.removeLayer(destMarker);
+                        const redIcon = new L.Icon({
+                            iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+                            shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+                            iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
+                        });
+                        destMarker = L.marker(e.latlng, {icon: redIcon}).addTo(map).bindPopup("目的地").openPopup();
+                    }
+                }
+            });
+        }
+
+        function toggleFullscreen() {
+            const container = document.getElementById('map-container');
+            isFullscreen = !isFullscreen;
+            if (isFullscreen) {
+                container.classList.add('is-fullscreen');
+                document.body.classList.add('fullscreen-active');
+            } else {
+                container.classList.remove('is-fullscreen');
+                document.body.classList.remove('fullscreen-active');
+            }
+            setTimeout(() => { if (map) map.invalidateSize(); }, 300);
+        }
+
+        function toggleRouteMode() {
+            const mode = document.querySelector('input[name="route-mode"]:checked').value;
+            document.getElementById('distance-input-area').style.display = (mode === 'loop' ? 'flex' : 'none');
+            document.getElementById('dest-hint').style.display = (mode === 'dest' ? 'block' : 'none');
+        }
+
+        function centerMap() {
+            isTrackingMode = true;
+            if (map) map.setView([currentLat, currentLng], 17);
+        }
+
+        function clearMap() { 
+            if (destMarker) { map.removeLayer(destMarker); destMarker = null; }
+            if (waypointMarker) { map.removeLayer(waypointMarker); waypointMarker = null; }
+            goalPath.setLatLngs([]); 
+            isWaypointMode = false;
+            document.getElementById('dest-hint').innerText = "地図をタップして目的地を決めてください";
+        }
+
+        function enableWaypointMode() {
+            const mode = document.querySelector('input[name="route-mode"]:checked').value;
+            if (mode !== 'dest') return alert("中継地を追加するには「目的地モード」にしてください。");
+            isWaypointMode = true;
+            document.getElementById('dest-hint').innerText = "地図をタップして中継地(緑)を決めてください";
+            if (isFullscreen) alert("中継地追加モードです。\n地図をタップしてください。");
+        }
+
+        async function generateGoalRoute() {
+            const key = localStorage.getItem('map_api_key');
+            if(!key) return alert("設定画面で地図APIキーを保存してください。");
+            
+            const btn1 = document.getElementById('route-btn');
+            const btn2 = document.getElementById('fs-route-btn');
+            const mode = document.querySelector('input[name="route-mode"]:checked').value;
+            const type = document.getElementById('goal-type').value;
+            const value = parseFloat(document.getElementById('goal-value').value);
+            
+            btn1.innerText = "検索中..."; btn1.disabled = true;
+            if(btn2) { btn2.innerText = "検索中..."; btn2.disabled = true; }
+
+            try {
+                let url = 'https://api.openrouteservice.org/v2/directions/foot-hiking/geojson';
+                let body = { coordinates: [[currentLng, currentLat]], units: "m" };
+
+                if (mode === 'loop') {
+                    let distMeters = (type === 'distance' ? value : value * 0.0007) * 1000;
+                    body.options = { round_trip: { length: Math.round(distMeters), points: 3, seed: Math.floor(Math.random()*100) } };
+                } else {
+                    if (!destMarker) throw new Error("目的地を地図上でタップしてください");
+                    if (waypointMarker) {
+                        body.coordinates.push([waypointMarker.getLatLng().lng, waypointMarker.getLatLng().lat]);
+                    }
+                    body.coordinates.push([destMarker.getLatLng().lng, destMarker.getLatLng().lat]);
+                }
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 
+                        'Accept': 'application/json, application/geo+json, application/gpx+xml, img/png; charset=utf-8', 
+                        'Content-Type': 'application/json',
+                        'Authorization': key 
+                    },
+                    body: JSON.stringify(body)
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.error?.message || "通信エラー");
+                }
+
+                const data = await res.json();
+                if (!data.features || data.features.length === 0) throw new Error("ルートが見つかりませんでした");
+
+                const route = data.features[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                goalPath.setLatLngs(route);
+                map.fitBounds(goalPath.getBounds());
+                isTrackingMode = false;
+                
+                alert("ルートを作成しました！");
+            } catch (e) { 
+                alert("エラー: " + e.message); 
+            } finally { 
+                btn1.innerText = "ルート検索開始"; btn1.disabled = false; 
+                if(btn2) { btn2.innerText = "🔍 ルートを再検索"; btn2.disabled = false; }
+            }
+        }
+
+        window.onload = function() {
+            // プロフィールの読み込み
+            const saved = JSON.parse(localStorage.getItem('user_lite_profile'));
+            if(saved) {
+                document.getElementById('gender-input').value = saved.gender || 'male';
+                document.getElementById('dob-input').value = saved.dob || '1990-01-01';
+                document.getElementById('weight-input').value = saved.weight || 65;
+                document.getElementById('height-input').value = saved.height || 170;
+                document.getElementById('goal-mode').value = saved.mode || 'keep';
+                if(saved.lastDate === new Date().toLocaleDateString()) todayFoodLogs = saved.logs || todayFoodLogs;
+            }
+            document.getElementById('map-api-key').value = localStorage.getItem('map_api_key') || "";
+
+            // ★ 修正箇所：ショートカットからの連携（昨日の歩数）
+            const params = new URLSearchParams(window.location.search);
+            if(params.has('y_steps')) {
+                const ySteps = parseInt(params.get('y_steps')) || 0;
+                saveYesterdayData(ySteps);
+                
+                // 処理が終わったらURLからパラメータを消去してリロード時のバグを防ぐ
+                window.history.replaceState(null, '', window.location.pathname);
+            }
+            
+            document.getElementById('steps-display').innerText = steps.toLocaleString();
+
+            renderLogs(); calcAll(); displayHistory(); initMap();
+        };
+    </script>
+</body>
+</html>
